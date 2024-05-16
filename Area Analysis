@@ -1,0 +1,92 @@
+var FinalMapDecember = ee.Image("projects/rebeccaresearch-1/assets/export_final_image"),
+    buffer1 = ee.FeatureCollection("users/murrnick/coastal_frontiers/final_merged_buffers_test2"),
+    FinalMap = ee.Image("projects/rebeccaresearch-1/assets/Final_Image_June"); 
+
+
+// *********************** Area Computation *******************************
+
+
+// Adjust the function to accept a geometry directly
+var calculateAreaForClass = function(geometry, classValue) {
+  var area = FinalMap
+    .eq(classValue)
+    .selfMask()
+    .multiply(ee.Image.pixelArea())
+    .reduceRegion({
+      reducer: ee.Reducer.sum(),
+      geometry: geometry,  // Direct use of geometry
+      scale: 30,
+      maxPixels: 1e14
+    });
+
+  return ee.Number(area.get('FinalMap'));
+};
+
+
+
+// Function that applies area calculations for each feature
+var getArea = function(feature) {
+  // Simplify the feature geometry for all calculations
+  var simplifiedGeometry = feature.geometry().simplify(1000);
+
+  // Calculate areas for all classes
+  var water = calculateAreaForClass(simplifiedGeometry, 1); 
+  var trees = calculateAreaForClass(simplifiedGeometry, 2);
+  var grass = calculateAreaForClass(simplifiedGeometry, 3);
+  var flooded_vegetation = calculateAreaForClass(simplifiedGeometry, 4);
+  var crops = calculateAreaForClass(simplifiedGeometry, 5);
+  var shrub_and_scrub = calculateAreaForClass(simplifiedGeometry, 6);
+  var built = calculateAreaForClass(simplifiedGeometry, 7);
+  var bare = calculateAreaForClass(simplifiedGeometry, 8);
+  var snow_and_ice = calculateAreaForClass(simplifiedGeometry, 9); 
+  var industrial_PO = calculateAreaForClass(simplifiedGeometry, 10); 
+  var smallholder_PO = calculateAreaForClass(simplifiedGeometry, 11); 
+  var aquaculture = calculateAreaForClass(simplifiedGeometry, 12);  
+
+  // Set calculated areas as properties of the feature
+  var areaResults = {
+    water: ee.Number(water).divide(1000 * 1000), // Converting to square kilometers
+    trees: ee.Number(trees).divide(1000 * 1000),
+    grass: ee.Number(grass).divide(1000 * 1000),
+    flooded_vegetation: ee.Number(flooded_vegetation).divide(1000 * 1000),
+    crops: ee.Number(crops).divide(1000 * 1000),
+    shrub_and_scrub: ee.Number(shrub_and_scrub).divide(1000 * 1000),
+    built: ee.Number(built).divide(1000 * 1000),
+    bare: ee.Number(bare).divide(1000 * 1000),
+    snow_and_ice: ee.Number(snow_and_ice).divide(1000 * 1000),
+    industrial_PO: ee.Number(industrial_PO).divide(1000 * 1000),
+    smallholder_PO: ee.Number(smallholder_PO).divide(1000 * 1000),
+    aquaculture: ee.Number(aquaculture).divide(1000 * 1000),
+  };
+
+  return feature.set(areaResults);
+};
+
+
+var updatedTWbufferWithAreas = buffer1.map(getArea);
+
+// Export logic remains unchanged
+
+Export.table.toDrive({
+  collection: updatedTWbufferWithAreas,
+  description: 'TWbuffer_Areas_CSVJune',
+  folder: 'Coastalfrontiers',
+  fileNamePrefix: 'twbuffer_areas_csv',
+  fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+  collection: updatedTWbufferWithAreas,
+  description: 'TWbuffer_Areas_Shapefile',
+  folder: 'Coastalfrontiers',
+  fileNamePrefix: 'twbuffer_areas_shapefile',
+  fileFormat: 'SHP'
+});
+
+Export.table.toDrive({
+  collection: updatedTWbufferWithAreas,
+  description: 'TWbuffer_Areas_GeoJSON',
+  folder: 'Coastalfrontiers',
+  fileNamePrefix: 'twbuffer_areas_geojson',
+  fileFormat: 'GeoJSON'
+});
