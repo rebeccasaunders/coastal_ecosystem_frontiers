@@ -1,0 +1,21 @@
+var dw_base = ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1"),
+grid_2degree = ee.FeatureCollection("projects/UQ_intertidal/dataMasks/worldCoastGrid_2deg"); 
+
+
+var startDate = '2019-12-01';
+var endDate = '2019-12-31';
+var dw = dw_base
+          .filterBounds(grid_2degree)
+          .filterDate(startDate, endDate)
+print (dw.size())
+function getFootprints (img) {
+  var footprint = img.geometry().simplify(100)
+  return ee.Feature(footprint);
+}
+var footprints = dw.map(getFootprints).union()
+print (footprints, 'footprints')
+Map.addLayer(footprints)
+
+Export.table.toAsset(footprints, "footprints", "projects/UQ_intertidal/dataMasks/dynamicWorldGlobalFootprint");
+
+
