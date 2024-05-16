@@ -1,0 +1,295 @@
+var dw_base = ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1"),
+    palmOilCollection_base = ee.ImageCollection("users/adriadescals/shared/OP/global_oil_palm_map_v1"),
+    Bangladesh_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Bangladesh_Landcover_2020_v2exp"),
+    Cambodia_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Cambodia_Landcover_2020_v2exp"),
+    ElSalvador_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/el_salvador_landcover_2020_v2exp"),
+    China_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/china_landcover_2020_v2exp"),
+    Ecuador_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Ecuador_Landcover_2020_v2exp"),
+    Honduras_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/honduras_landcover_2020_v2exp"),
+    SriLanka_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/sri_lanka_landcover_2020_v2exp"),
+    Malaysia_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/malaysia_landcover_2020_v2exp"),
+    Myanmar_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Myanmar_Landcover_2020_v2exp"),
+    Thailand_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Thailand_Landcover_2020_v2exp"),
+    Nicaragua_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Nicaragua_Landcover_2020_v2exp"),
+    Brazil_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/brazil_landcover_2020_v2exp"),
+    India_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/india_landcover_2020_v2exp"),
+    Vietnam_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Vietnam_Landcover_2020_v2exp"),
+    Philippines_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Philippines_Landcover_2020_v2exp"),
+    Mexico_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Mexico_Landcover_2020_v1exp"),
+    Indonesia_Landcover_2020 = ee.Image("projects/rebeccaresearch-1/assets/Indonesia_Landcover_2020_v2exp"),
+    geometry = /* color: #d63000 */ee.Geometry.MultiPoint(); 
+
+var coords = [[-94.67127972826778,29.5385957663406],[-94.66986224429066,29.538901393499486],[-94.66545340566653,29.53921683799308],[-94.66431955233773,29.540257649811075],[-94.66287607025234,29.540541157248434],[-94.6609764820481,29.541499862119483],[-94.66033276129558,29.54219152002493],[-94.65548286453995,29.542454169282774],[-94.65279586427651,29.544371795384325],[-94.64712657211258,29.54434031948486],[-94.64642010997152,29.544988714363786],[-94.64559257870894,29.544951258955283],[-94.64529358903138,29.54516103752973],[-94.64468733790844,29.545219867593666],[-94.64179790421804,29.54480855087327],[-94.63969089056759,29.545881356182537],[-94.6393632435529,29.545878724962638],[-94.63913088886594,29.546059948207592],[-94.63694642495354,29.545620100615597],[-94.633316669618,29.547564304624657],[-94.63309923559959,29.54886157590315],[-94.63205345236393,29.54888813140954],[-94.6313992766979,29.54834909281471],[-94.62637836000205,29.54838029411353]]
+
+// Create the polygon geometry.
+var polygon = ee.Geometry.Polygon(coords); 
+
+// Add the polygon as a layer to the map.
+Map.addLayer(polygon, {color: 'FF0000'}, 'Polygon');
+Map.centerObject(polygon);
+
+
+
+
+var TW_buffer_simple = ee.FeatureCollection('users/murrnick/coastal_frontiers/final_merged_buffers_test2')  //63229 buffers to run over
+print(TW_buffer_simple.size())
+
+// Convert to Image
+var tw_buffer_img = ee.Image.constant(0).paint(TW_buffer_simple, 1).selfMask();
+
+
+
+Map.addLayer(tw_buffer_img, {}, 'buffer')
+
+// Assuming tw_buffer_img is 1 inside buffers and 0 outside
+var baseMask = ee.Image.constant(0).paint(TW_buffer_simple, 1).selfMask();
+
+
+
+
+// Define output bounds
+var site = ee.Geometry.Polygon([-180, 60, 0, 60, 180, 60, 180, -60, 10, -60, -180, -60], null, false);
+
+
+// Date Range 
+var startDate = '2019-01-01';
+var endDate = '2019-12-31';  
+
+// *********** DW Processing ***********************
+
+var dw = dw_base
+
+          .select('label') // only select the label band 
+
+          .filterDate(startDate, endDate)
+
+          .median()
+          .updateMask(tw_buffer_img)// nick's code
+
+          .remap([0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], null) // FIXES Dw NUMBER scheme to avoid 0 as water
+          .rename('processed') 
+          .toInt() // ensure it's an integer 
+          
+          
+          
+
+
+// ************* Palm Oil Processing *****************
+var palmOilRaw = palmOilCollection_base
+  .median()
+  .updateMask(tw_buffer_img); // Mask to focus on buffer zones
+
+// Remap the classifications within palm oil datasets
+var PalmOil1 = palmOilRaw.remap([1, 2], [10, 11], null);
+
+// Create a mask to identify no-data areas (assuming '3' is a no-data value in your scheme)
+var POmask = PalmOil1.neq(3); 
+
+// Apply the mask to remove no palm oil pixels, then fill the masked (no-data) areas with '0'
+// Assuming '0' is not used for any land use classification to make sure it represents no-data or non-classified areas outside buffer zones
+var remappedPalmOil = PalmOil1.updateMask(POmask)
+  .rename('processed') 
+  .toInt();
+
+
+
+// **************** Aquaculture Processing ************** 
+
+// Combine the individual images into an ImageCollection
+var clark2020Collection = ee.ImageCollection([
+  Bangladesh_Landcover_2020,
+  Cambodia_Landcover_2020,
+  Ecuador_Landcover_2020,
+  ElSalvador_Landcover_2020,
+  Honduras_Landcover_2020,
+  SriLanka_Landcover_2020,
+  China_Landcover_2020,
+  Malaysia_Landcover_2020,
+  Myanmar_Landcover_2020,
+  Thailand_Landcover_2020,
+  Nicaragua_Landcover_2020,
+  India_Landcover_2020,
+  Vietnam_Landcover_2020,
+  Philippines_Landcover_2020,
+  Mexico_Landcover_2020,
+  Brazil_Landcover_2020,
+  Indonesia_Landcover_2020
+]);
+
+// Apply mosaic to combine ImageCollection into a single image
+var clark2020 = clark2020Collection
+  //.filterBounds(TW_buffer_simple) 
+  .median() 
+  .updateMask(tw_buffer_img) 
+
+
+
+// // Directly identify aquaculture areas without intermediate steps that might cause confusion
+// var remappedAquaculture = clark2020.eq(3).remap([0,1], [0,12])
+//   .rename('processed') // needed to avoid non homogeneous image collection error
+//   .toInt();  // ensure it is an int 
+
+var remappedAquaculture = clark2020.eq(3) // Identifies aquaculture areas
+  .selfMask() // Mask itself to keep only aquaculture areas
+  .remap([1], [12], 0) // Remaps identified aquaculture to '12', sets everything else to '0'
+  .updateMask(tw_buffer_img) // Apply buffer zone mask
+  .rename('processed')
+  .toInt(); 
+
+
+print(dw)
+print (remappedAquaculture)
+print (remappedPalmOil) 
+
+
+
+// ************************* Combined Map ********************** 
+
+// Combine into an image collection
+var combinedCollection = ee.ImageCollection.fromImages([dw, remappedAquaculture, remappedPalmOil]);
+
+// Step 2: Use a reducer to find the max value across the images in the collection
+var maxImage = combinedCollection.reduce(ee.Reducer.max());
+
+// Rename
+var finalImage = maxImage.rename('FinalMap').set({codeLink: ''});  
+
+
+// Define the custom 12-color palette
+var palette = [
+  '1f78b4', // Water
+  '33a02c', // Trees
+  'b2df8a', // Grass
+  '7fbf7b', // Flooded Vegetation
+  'dbce00', // Crops
+  '739973', // Shrub and Scrub
+  'cccccc', // Built
+  'fdbf6f', // Bare
+  'a6cee3', // Snow and Ice
+  '8B0000', // Industrial PO
+  'cab2d6', // Smallholder PO
+  '1fa2a2'  // Aquaculture
+];
+
+
+// Corresponding labels for each category in the palette
+var labels = [
+  'Water', 'Trees', 'Grass',
+  'Flooded Vegetation', 'Crops', 'Shrub and Scrub',
+  'Built', 'Bare', 'Snow and Ice',
+  'Industrial Palm Oil', 'Smallholder Palm Oil', 'Aquaculture'
+];
+
+// Create the legend
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-left',
+    padding: '8px 15px'
+  }
+});
+
+// Legend title
+var legendTitle = ui.Label({
+  value: 'Legend',
+  style: {
+    fontWeight: 'bold',
+    fontSize: '18px',
+    margin: '0 0 4px 0',
+    padding: '0'
+    }
+});
+
+legend.add(legendTitle);
+
+// Add the color boxes and labels to the legend
+for (var i = 0; i < labels.length; i++) {
+  var layer = ui.Panel({
+    widgets: [
+      ui.Label({
+        style: {
+          backgroundColor: '#' + palette[i],
+          // Ensure the color box fits the label size
+          padding: '8px',
+          margin: '0 8px 0 0'
+        }
+      }),
+      ui.Label({
+        value: labels[i],
+        style: {margin: '0 0 4px 6px'}
+      })
+    ],
+    layout: ui.Panel.Layout.Flow('horizontal')
+  });
+  
+  legend.add(layer);
+}
+
+// Add the legend to the map
+Map.add(legend);
+
+
+// Visualization parameters
+var visParams = {
+  min: 1,    // Set the minimum data value; adjust based on your data
+  max: 12,    // Set the maximum data value; adjust based on your data
+  palette: palette
+};
+
+// Add the layer to the map using the custom palette
+Map.addLayer(finalImage, visParams, 'final image');
+
+
+
+var assetName = 'projects/UQ_intertidal/externalAnalyses/coastalFrontiers/final_map'
+Export.image.toAsset({
+  image: finalImage, 
+  description: 'export_finalimage_June',
+  assetId: assetName,
+  scale: 30,
+  region: site, 
+  maxPixels: 10000000000000,
+  pyramidingPolicy: {'.default': 'sample'} 
+}); 
+
+
+
+
+Map.addLayer(dw, {min: 1, max: 9, palette: palette}, 'Raw DW', false); 
+
+// Map.addLayer(palmOilRaw,{min: 0, max: , palette:('8B0000', 'cab2d6')}, 'Raw PO', false);   
+
+// Define the color palette for the palm oil classifications
+var palmOilPalette = {
+  10: '#8B0000', // Industrial Palm Oil
+  11: '#cab2d6'  // Smallholder Palm Oil
+};
+
+// Visualization parameters for displaying palm oil classifications
+var visParamsPalmOil = {
+  min: 10,  // Minimum value in your remapped palm oil data
+  max: 11,  // Maximum value in your remapped palm oil data
+  palette: [palmOilPalette[10], palmOilPalette[11]] // Palette for Industrial and Smallholder Palm Oil
+};
+
+// Add the remappedPalmOil layer to the map with the specified visualization parameters
+Map.addLayer(remappedPalmOil, visParamsPalmOil, 'Palm Oil');
+
+
+// Define the color palette for aquaculture
+var aquacultureColor = '#1fa2a2'; // Teal for aquaculture
+
+// Visualization parameters for displaying aquaculture areas
+var visParamsAquaculture = {
+  min: 12,  // The value representing aquaculture in your data
+  max: 12,  // Same as min if only displaying aquaculture
+  palette: [aquacultureColor] // Color for aquaculture
+};
+
+// Assuming 'remappedAquaculture' is your processed image for aquaculture areas
+Map.addLayer(remappedAquaculture, visParamsAquaculture, 'Aquaculture');
+
+
+
+var tw_image_base = ee.Image("projects/UQ_intertidal/global_intertidal_v2_0/outputs/gic_v2_0/L4_pp_error_vectors/L4_gic_20172019_v2_0_8") 
+
+Map.addLayer(tw_image_base, {}, 'tw')
