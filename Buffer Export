@@ -1,0 +1,52 @@
+
+
+//BUFFER
+
+
+
+// var TW_buffer_simple = ee.FeatureCollection("projects/rebeccaresearch-1/assets/new_TW_buffer")
+var TWbuffer = ee.FeatureCollection("projects/rebeccaresearch-1/assets/buffered_tw_zones");
+
+Map.addLayer(TWbuffer)
+print (TWbuffer.size(), 'simple import')
+
+
+function Simplify(f) { 
+  // simplify
+  return f.simplify(100)
+}
+
+var simpletw = TWbuffer.map(Simplify).union()
+Map.addLayer(simpletw)
+print (simpletw.size(), 'simplified and unioned')
+
+
+// Get a geometry collection of polygons from the feature collection.
+var elements = simpletw.geometry().geometries();
+
+// Get the parts of a geometry with geometries():
+// (For Point or Polygon, returns a list of 1 element for that part.)
+print(elements.size());
+
+// Show the sizes of each part of the union.
+var fc = ee.FeatureCollection(elements.map(function(geom) {
+  // Explode features
+  return ee.Feature(ee.Geometry(geom));
+}));
+print(fc.size());
+
+var fc = fc.map(function(feat) {
+  // Explosion function - to turn multipolygons into single polygons
+  var featArea = feat.area(100);
+  return feat.set({'bufferArea_m2':featArea,
+    'country_name': 'null'}); 
+});
+
+print(fc.first());
+
+
+Export.table.toAsset({
+  collection: fc,
+  description: 'buffered_tw_zones_asset',
+  assetId: 'users/murrnick/coastal_frontiers/final_merged_buffers_test2'
+});
