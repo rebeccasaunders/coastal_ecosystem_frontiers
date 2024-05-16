@@ -1,0 +1,43 @@
+var footprint = ee.FeatureCollection("projects/rebeccaresearch-1/assets/footprints1"),
+    tw_image_base = ee.Image("projects/UQ_intertidal/global_intertidal_v2_0/outputs/gic_v2_0/L4_pp_error_vectors/L4_gic_20172019_v2_0_8"),
+    elevation = ee.Image("CGIAR/SRTM90_V4"),
+    grid_2degree = ee.FeatureCollection("projects/UQ_intertidal/dataMasks/worldCoastGrid_2deg"); 
+
+
+
+// Define elevation data and mask
+var elevationMask = elevation.lt(10); // Areas below 10 meters elevation are masked
+
+// Use the predefined grid with unique 'gridID' for each cell
+
+
+var filteredGrid = grid_2degree.filterBounds(footprint); // filtering to only grids with DW data
+
+// Processing function for each grid cell
+function processGridCell(gridCell) {
+  var cellGeometry = gridCell.geometry();
+  
+  var tw_image = tw_image_base
+    .select(['gic_cw_extent'])
+    .updateMask(elevationMask);
+
+  return tw_image.reduceToVectors({
+    geometry: cellGeometry,
+    scale: 30,
+    maxPixels: 1e9
+  }).map(function(feature) {
+    return feature.buffer(500); // Buffer by 500 meters
+  });
+}
+
+// Map the function over the filteredGrid and flatten the results
+var bufferedFeatureCollection = filteredGrid.map(processGridCell).flatten();
+
+// Export the final FeatureCollection
+Export.table.toDrive({
+  collection: bufferedFeatureCollection,
+  description: 'buffered_tw_zones2',
+  folder: 'EarthEngineExports',
+  fileNamePrefix: 'buffered_tw_zones',
+  fileFormat: 'SHP'
+});
